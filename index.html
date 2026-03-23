@@ -72,12 +72,29 @@
                 setLoading(true);
                 setError(null);
 
+                // We inject a high-variety system prompt here. 
+                // Note: If your Worker handles the prompt internally, 
+                // you should update your Worker code with these specific instructions.
+                const highVarietyPrompt = `Generate ${count} UNIQUE and VARIED WSET Level 2 Award in Wines questions. 
+                Ensure a wide distribution across the following syllabus areas:
+                1. Factors influencing wine style (climate, soil, viticulture).
+                2. Key white grape varieties (Chardonnay, Sauvignon Blanc, Riesling, Pinot Grigio, Chenin Blanc, Semillon, Furmint).
+                3. Key black grape varieties (Pinot Noir, Cabernet Sauvignon, Merlot, Syrah/Shiraz, Grenache/Garnacha, Tempranillo, Sangiovese, Nebbiolo, Malbec).
+                4. Regional specialties from France, Italy, Spain, Germany, USA, Australia, NZ, Chile, Argentina, and South Africa.
+                5. Sparkling wines (Champagne, Cava, Prosecco).
+                6. Fortified wines (Sherry, Port).
+                7. Service, storage, and food pairing.
+                Do NOT repeat the same concept twice. Return ONLY a JSON array.`;
+
                 try {
                     const response = await fetch(WORKER_URL, {
                         method: 'POST',
                         mode: 'cors', 
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ count })
+                        body: JSON.stringify({ 
+                            count,
+                            customPrompt: highVarietyPrompt // Passing this if your worker supports it
+                        })
                     });
 
                     const responseData = await response.text();
@@ -99,7 +116,10 @@
                         throw new Error("Invalid response format from server.");
                     }
 
-                    setQuestions(parsedQuestions);
+                    // Client-side shuffle for an extra layer of variety
+                    const shuffled = [...parsedQuestions].sort(() => Math.random() - 0.5);
+
+                    setQuestions(shuffled);
                     setMode(count);
                     setAnswers({});
                     setCurr(0);
@@ -129,7 +149,7 @@
                 <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center fade-in">
                     <div className="loader mb-6"></div>
                     <h2 className="serif text-3xl text-malbec font-bold">Uncorking the Knowledge...</h2>
-                    <p className="text-stone-500 mt-2 text-sm">Crafting your WSET Level 2 questions.</p>
+                    <p className="text-stone-500 mt-2 text-sm">Mixing a diverse blend of regions and grapes.</p>
                 </div>
             );
 
@@ -144,7 +164,7 @@
                             className="bg-white p-6 rounded-2xl border-2 border-stone-100 hover:border-malbec text-left shadow-sm group transition-all"
                         >
                             <h3 className="font-bold text-lg text-malbec group-hover:translate-x-1 transition-transform">Quick Sip</h3>
-                            <p className="text-sm text-stone-500">10 AI-Generated Questions</p>
+                            <p className="text-sm text-stone-500">10 Diverse Practice Questions</p>
                         </button>
 
                         <button 
@@ -152,7 +172,7 @@
                             className="bg-malbec p-6 rounded-2xl text-white hover:bg-[#2D091D] text-left shadow-xl group transition-all"
                         >
                             <h3 className="font-bold text-lg group-hover:translate-x-1 transition-transform">Full Vintage</h3>
-                            <p className="text-sm text-white/70">50 AI-Generated Questions (Timed)</p>
+                            <p className="text-sm text-white/70">Complete 50-Question Mock Exam</p>
                         </button>
                     </div>
 
