@@ -1,57 +1,270 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"><title>DecantEd</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DecantEd - WSET Level 2 Study Tool</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #FDFCFB; color: #2D091D; }
+        .serif { font-family: 'Playfair Display', serif; }
+        .bg-malbec { background-color: #4A0E2E; }
+        .text-malbec { color: #4A0E2E; }
+        
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4A0E2E;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
 </head>
-<body class="bg-stone-50 text-stone-900 font-sans">
+<body>
     <div id="app"></div>
+
+    <!-- Scripts loaded via CDN -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <script type="text/babel">
-        const { useState } = React;
-        
-        // PASTE YOUR WORKER URL HERE:
+        // Direct assignment from global React object to fix "undefined (reading 'default')"
+        const useState = React.useState;
+        const useEffect = React.useEffect;
+
+        // Your specific Cloudflare Worker URL
         const WORKER_URL = "https://decanted-api.nbilbao.workers.dev/";
 
         function App() {
+            const [view, setView] = useState('landing'); 
+            const [mode, setMode] = useState(null); 
+            const [questions, setQuestions] = useState([]);
+            const [curr, setCurr] = useState(0);
+            const [answers, setAnswers] = useState({});
+            const [timeLeft, setTimeLeft] = useState(0);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
+            const [showExitConfirm, setShowExitConfirm] = useState(false);
 
-            const startQuiz = async (count) => {
+            useEffect(() => {
+                let timer;
+                if (view === 'quiz' && mode === 50 && timeLeft > 0) {
+                    timer = setInterval(() => {
+                        setTimeLeft(prev => prev > 0 ? prev - 1 : 0);
+                    }, 1000);
+                } else if (timeLeft === 0 && view === 'quiz' && mode === 50) {
+                    setView('results');
+                }
+                return () => clearInterval(timer);
+            }, [view, mode, timeLeft]);
+
+            const fetchQuestionsWithAI = async (count) => {
                 setLoading(true);
                 setError(null);
+
                 try {
-                    const res = await fetch(WORKER_URL, {
+                    const response = await fetch(WORKER_URL, {
                         method: 'POST',
+                        mode: 'cors', 
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ count })
                     });
-                    if (!res.ok) throw new Error(await res.text());
-                    const data = await res.json();
-                    alert("Success! Loaded " + data.length + " questions.");
-                    console.log(data);
+
+                    const responseData = await response.text();
+                    
+                    if (!response.ok) {
+                        let msg = `Server Error (${response.status})`;
+                        try {
+                            const json = JSON.parse(responseData);
+                            msg = json.error || msg;
+                        } catch(e) {
+                            msg = responseData || msg;
+                        }
+                        throw new Error(msg);
+                    }
+                    
+                    const parsedQuestions = JSON.parse(responseData);
+                    
+                    if (!Array.isArray(parsedQuestions)) {
+                        throw new Error("Invalid response format from server.");
+                    }
+
+                    setQuestions(parsedQuestions);
+                    setMode(count);
+                    setAnswers({});
+                    setCurr(0);
+                    if (count === 50) setTimeLeft(3600); // 60 minutes for full exam
+                    setView('quiz');
                 } catch (err) {
+                    console.error("Fetch error:", err);
                     setError(err.message);
                 } finally {
                     setLoading(false);
                 }
             };
 
-            return (
-                <div className="flex flex-col items-center justify-center min-h-screen p-4">
-                    <h1 class="text-5xl font-serif font-bold text-[#4A0E2E] mb-8">DecantEd</h1>
-                    {loading ? <p>Loading questions...</p> : (
-                        <div className="space-y-4">
-                            <button onClick={() => startQuiz(10)} className="bg-[#4A0E2E] text-white px-8 py-4 rounded-xl font-bold">Quick Sip (10 Qs)</button>
-                        </div>
-                    )}
-                    {error && <p className="text-red-600 mt-4 bg-red-50 p-2 rounded">Error: {error}</p>}
+            const formatTime = (seconds) => {
+                const m = Math.floor(seconds / 60);
+                const s = seconds % 60;
+                return `${m}:${s.toString().padStart(2, '0')}`;
+            };
+
+            const calculateScore = () => {
+                return Object.entries(answers).reduce((acc, [idx, ans]) => {
+                    return acc + (ans === questions[idx].correctIndex ? 1 : 0);
+                }, 0);
+            };
+
+            if (loading) return (
+                <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center fade-in">
+                    <div className="loader mb-6"></div>
+                    <h2 className="serif text-3xl text-malbec font-bold">Uncorking the Knowledge...</h2>
+                    <p className="text-stone-500 mt-2 text-sm">Crafting your WSET Level 2 questions.</p>
                 </div>
             );
+
+            if (view === 'landing') return (
+                <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center fade-in relative">
+                    <h1 className="serif text-6xl text-malbec font-black tracking-tight mb-2">DecantEd</h1>
+                    <p className="text-stone-500 font-medium mb-12 uppercase tracking-widest text-xs">WSET Level 2 Study Tool</p>
+
+                    <div className="grid grid-cols-1 gap-4 w-full max-w-sm">
+                        <button 
+                            onClick={() => fetchQuestionsWithAI(10)} 
+                            className="bg-white p-6 rounded-2xl border-2 border-stone-100 hover:border-malbec text-left shadow-sm group transition-all"
+                        >
+                            <h3 className="font-bold text-lg text-malbec group-hover:translate-x-1 transition-transform">Quick Sip</h3>
+                            <p className="text-sm text-stone-500">10 AI-Generated Questions</p>
+                        </button>
+
+                        <button 
+                            onClick={() => fetchQuestionsWithAI(50)} 
+                            className="bg-malbec p-6 rounded-2xl text-white hover:bg-[#2D091D] text-left shadow-xl group transition-all"
+                        >
+                            <h3 className="font-bold text-lg group-hover:translate-x-1 transition-transform">Full Vintage</h3>
+                            <p className="text-sm text-white/70">50 AI-Generated Questions (Timed)</p>
+                        </button>
+                    </div>
+
+                    {error && (
+                        <div className="mt-8 p-4 bg-red-50 text-red-700 rounded-xl text-xs max-w-xs border border-red-100 fade-in text-left">
+                            <span className="font-bold block mb-1">Issue:</span> 
+                            {error}
+                        </div>
+                    )}
+                </div>
+            );
+
+            if (view === 'quiz') {
+                const q = questions[curr];
+                const answered = answers[curr] !== undefined;
+                return (
+                    <div className="min-h-screen flex flex-col fade-in">
+                        <header className="bg-white border-b border-stone-100 p-4 flex justify-between items-center sticky top-0 z-10">
+                            <button onClick={() => setShowExitConfirm(true)} className="text-stone-400 font-bold text-xs uppercase hover:text-malbec transition-colors">Exit</button>
+                            <div className="flex items-center gap-4">
+                                {mode === 50 && <div className="text-malbec font-mono font-bold px-3 py-1 bg-stone-50 rounded-full">{formatTime(timeLeft)}</div>}
+                                <span className="text-xs font-bold text-stone-400 tracking-tighter">{curr + 1} / {questions.length}</span>
+                            </div>
+                        </header>
+                        
+                        {showExitConfirm && (
+                            <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+                                <div className="bg-white p-8 rounded-3xl max-w-sm w-full shadow-2xl">
+                                    <h3 className="serif text-2xl font-bold mb-4 text-malbec text-center">Exit Session?</h3>
+                                    <div className="flex gap-3">
+                                        <button onClick={() => setShowExitConfirm(false)} className="flex-1 font-bold text-stone-400">Stay</button>
+                                        <button onClick={() => setView('landing')} className="flex-1 bg-malbec text-white py-3 rounded-xl font-bold">Exit</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <main className="flex-1 max-w-2xl w-full mx-auto p-6 py-12">
+                            <h2 className="serif text-2xl font-bold mb-10 leading-snug">{q.question}</h2>
+                            <div className="space-y-3">
+                                {q.options.map((opt, i) => {
+                                    const isCorrect = i === q.correctIndex;
+                                    const isSelected = answers[curr] === i;
+                                    let style = "border-stone-100 bg-white hover:border-malbec/20";
+                                    
+                                    if (mode === 10 && answered) {
+                                        if (isCorrect) style = "border-green-500 bg-green-50 text-green-900";
+                                        else if (isSelected) style = "border-red-500 bg-red-50 text-red-900";
+                                        else style = "opacity-40 border-stone-50";
+                                    } else if (isSelected) {
+                                        style = "bg-malbec text-white border-malbec shadow-md";
+                                    }
+
+                                    return (
+                                        <button 
+                                            key={i} 
+                                            onClick={() => !answered || mode === 50 ? setAnswers({...answers, [curr]: i}) : null} 
+                                            className={`w-full text-left p-5 rounded-2xl border-2 transition-all font-medium ${style}`}
+                                        >
+                                            {opt}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {mode === 10 && answered && (
+                                <div className="mt-8 p-6 bg-stone-50 rounded-2xl border border-stone-100 text-sm leading-relaxed fade-in text-left">
+                                    <span className="font-bold text-malbec block mb-1 uppercase text-[10px] tracking-widest">Sommelier Note</span>
+                                    {q.explanation}
+                                </div>
+                            )}
+                        </main>
+
+                        <footer className="p-6 bg-white border-t border-stone-100 flex justify-between sticky bottom-0">
+                            <button onClick={() => setCurr(prev => prev - 1)} disabled={curr === 0} className="px-6 py-2 font-bold text-stone-400 disabled:opacity-20 hover:text-malbec transition-colors">Back</button>
+                            <button 
+                                onClick={() => curr === questions.length - 1 ? setView('results') : setCurr(prev => prev + 1)} 
+                                disabled={mode === 10 && !answered} 
+                                className="px-10 py-3 bg-malbec text-white rounded-xl font-bold shadow-lg disabled:opacity-50 hover:bg-[#2D091D] transition-colors"
+                            >
+                                {curr === questions.length - 1 ? 'Finish' : 'Next'}
+                            </button>
+                        </footer>
+                    </div>
+                );
+            }
+
+            if (view === 'results') {
+                const score = calculateScore();
+                const total = questions.length;
+                const percent = (score / total) * 100;
+                let rank = "Fail";
+                if (percent >= 85) rank = "Distinction";
+                else if (percent >= 70) rank = "Merit";
+                else if (percent >= 55) rank = "Pass";
+
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center fade-in">
+                        <div className={`p-12 rounded-[3rem] shadow-2xl max-w-sm w-full ${percent >= 55 ? 'bg-malbec' : 'bg-stone-900'} text-white`}>
+                            <h2 className="serif text-4xl font-black mb-8">{rank}!</h2>
+                            <div className="text-7xl font-black mb-10">{score}<span className="text-2xl opacity-30">/{total}</span></div>
+                            <div className="mb-8 text-sm opacity-80">You scored {Math.round(percent)}%</div>
+                            <button onClick={() => setView('landing')} className="w-full py-4 bg-white text-malbec rounded-2xl font-black shadow-lg hover:bg-stone-100 transition-colors">Return Home</button>
+                        </div>
+                    </div>
+                );
+            }
         }
-        ReactDOM.createRoot(document.getElementById('app')).render(<App />);
+
+        // Initialize React app correctly
+        const container = document.getElementById('app');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
     </script>
 </body>
 </html>
