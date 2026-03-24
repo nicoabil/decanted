@@ -76,16 +76,16 @@
                 // We inject a high-variety system prompt here. 
                 // Note: If your Worker handles the prompt internally, 
                 // you should update your Worker code with these specific instructions.
-                const highVarietyPrompt = `Generate ${count} UNIQUE and VARIED WSET Level 2 Award in Wines questions. 
-                Ensure a wide distribution across the following syllabus areas:
-                1. Factors influencing wine style (climate, soil, viticulture).
-                2. Key white grape varieties (Chardonnay, Sauvignon Blanc, Riesling, Pinot Grigio, Chenin Blanc, Semillon, Furmint).
-                3. Key black grape varieties (Pinot Noir, Cabernet Sauvignon, Merlot, Syrah/Shiraz, Grenache/Garnacha, Tempranillo, Sangiovese, Nebbiolo, Malbec).
-                4. Regional specialties from France, Italy, Spain, Germany, USA, Australia, NZ, Chile, Argentina, and South Africa.
-                5. Sparkling wines (Champagne, Cava, Prosecco).
-                6. Fortified wines (Sherry, Port).
-                7. Service, storage, and food pairing.
-                Do NOT repeat the same concept twice. Return ONLY a JSON array.`;
+                //const highVarietyPrompt = `Generate ${count} UNIQUE and VARIED WSET Level 2 Award in Wines questions. 
+                //Ensure a wide distribution across the following syllabus areas:
+                //1. Factors influencing wine style (climate, soil, viticulture).
+                //2. Key white grape varieties (Chardonnay, Sauvignon Blanc, Riesling, Pinot Grigio, Chenin Blanc, Semillon, Furmint).
+                //3. Key black grape varieties (Pinot Noir, Cabernet Sauvignon, Merlot, Syrah/Shiraz, Grenache/Garnacha, Tempranillo, Sangiovese, Nebbiolo, Malbec).
+                //4. Regional specialties from France, Italy, Spain, Germany, USA, Australia, NZ, Chile, Argentina, and South Africa.
+                //5. Sparkling wines (Champagne, Cava, Prosecco).
+                //6. Fortified wines (Sherry, Port).
+                //7. Service, storage, and food pairing.
+                //Do NOT repeat the same concept twice. Return ONLY a JSON array.`;
 
                 try {
                     const response = await fetch(WORKER_URL, {
@@ -93,8 +93,9 @@
                         mode: 'cors', 
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ 
-                            count,
-                            customPrompt: highVarietyPrompt // Passing this if your worker supports it
+                              count,
+                  //          count,
+                  //          customPrompt: highVarietyPrompt // Passing this if your worker supports it
                         })
                     });
 
