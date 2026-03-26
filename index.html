@@ -11,41 +11,58 @@
         .serif { font-family: 'Playfair Display', serif; }
         .bg-malbec { background-color: #4A0E2E; }
         .text-malbec { color: #4A0E2E; }
-        
         .fade-in { animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .loader {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #4A0E2E;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #4A0E2E; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div id="app"></div>
 
-    <!-- Scripts loaded via CDN -->
+    <!-- React / Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <script type="text/babel">
-        // Direct assignment from global React object to fix "undefined (reading 'default')"
         const useState = React.useState;
         const useEffect = React.useEffect;
 
-        // Your specific Cloudflare Worker URL
         const WORKER_URL = "https://decant-ed.com/api";
 
-        
+        // --- Helper functions for localStorage tracking ---
+        const STORAGE_KEY = "seenQuestions";
+
+        function getSeenQuestions() {
+            return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+        }
+
+        function saveSeenQuestion(id) {
+            const seen = getSeenQuestions();
+            // Keep only the last 200 questions to avoid storage bloat
+            if (!seen.includes(id)) {
+                seen.push(id);
+                if (seen.length > 200) seen.shift();
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(seen));
+            }
+        }
+
+        function hasSeenQuestion(id) {
+            const seen = getSeenQuestions();
+            return seen.includes(id);
+        }
+
+        function hashQuestion(q) {
+            // Simple hash function to create unique IDs from question text
+            let hash = 0;
+            for (let i = 0; i < q.length; i++) {
+                hash = ((hash << 5) - hash) + q.charCodeAt(i);
+                hash |= 0;
+            }
+            return hash.toString();
+        }
+
         function App() {
             const [view, setView] = useState('landing'); 
             const [mode, setMode] = useState(null); 
@@ -74,42 +91,43 @@
                 setError(null);
 
                 try {
+                    const seenIds = getSeenQuestions();
                     const response = await fetch(WORKER_URL, {
                         method: 'POST',
-                        mode: 'cors', 
+                        mode: 'cors',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ 
-                              count
+                            count,
+                            exclude: seenIds  // Pass seen IDs to Worker to avoid repeats
                         })
                     });
 
                     const responseData = await response.text();
-                    
+
                     if (!response.ok) {
                         let msg = `Server Error (${response.status})`;
                         try {
                             const json = JSON.parse(responseData);
                             msg = json.error || msg;
-                        } catch(e) {
-                            msg = responseData || msg;
-                        }
+                        } catch(e) { msg = responseData || msg; }
                         throw new Error(msg);
                     }
-                    
+
                     const parsedQuestions = JSON.parse(responseData);
-                    
-                    if (!Array.isArray(parsedQuestions)) {
-                        throw new Error("Invalid response format from server.");
-                    }
 
-                    // Client-side shuffle for an extra layer of variety
-                    const shuffled = [...parsedQuestions].sort(() => Math.random() - 0.5);
+                    if (!Array.isArray(parsedQuestions)) throw new Error("Invalid response format from server.");
 
-                    setQuestions(shuffled);
+                    // Filter out any questions that somehow were seen
+                    const newQuestions = parsedQuestions.filter(q => !hasSeenQuestion(hashQuestion(q.question)));
+
+                    // Add unique IDs to each question
+                    const questionsWithIds = newQuestions.map(q => ({ ...q, id: hashQuestion(q.question) }));
+
+                    setQuestions(questionsWithIds);
                     setMode(count);
                     setAnswers({});
                     setCurr(0);
-                    if (count === 50) setTimeLeft(3600); // 60 minutes for full exam
+                    if (count === 50) setTimeLeft(3600);
                     setView('quiz');
                 } catch (err) {
                     console.error("Fetch error:", err);
@@ -143,7 +161,6 @@
                 <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center fade-in relative">
                     <h1 className="serif text-6xl text-malbec font-black tracking-tight mb-2">DecantEd</h1>
                     <p className="text-stone-500 font-medium mb-12 uppercase tracking-widest text-xs">Wine learning - WSET inspired</p>
-
                     <div className="grid grid-cols-1 gap-4 w-full max-w-sm">
                         <button 
                             onClick={() => fetchQuestionsWithAI(10)} 
@@ -152,7 +169,6 @@
                             <h3 className="font-bold text-lg text-malbec group-hover:translate-x-1 transition-transform">Quick Sip</h3>
                             <p className="text-sm text-stone-500">10 Diverse Practice Questions</p>
                         </button>
-
                         <button 
                             onClick={() => fetchQuestionsWithAI(50)} 
                             className="bg-malbec p-6 rounded-2xl text-white hover:bg-[#2D091D] text-left shadow-xl group transition-all"
@@ -161,7 +177,6 @@
                             <p className="text-sm text-white/70">Complete 50-Question Mock Exam</p>
                         </button>
                     </div>
-
                     {error && (
                         <div className="mt-8 p-4 bg-red-50 text-red-700 rounded-xl text-xs max-w-xs border border-red-100 fade-in text-left">
                             <span className="font-bold block mb-1">Issue:</span> 
@@ -174,6 +189,7 @@
             if (view === 'quiz') {
                 const q = questions[curr];
                 const answered = answers[curr] !== undefined;
+
                 return (
                     <div className="min-h-screen flex flex-col fade-in">
                         <header className="bg-white border-b border-stone-100 p-4 flex justify-between items-center sticky top-0 z-10">
@@ -215,7 +231,12 @@
                                     return (
                                         <button 
                                             key={i} 
-                                            onClick={() => !answered || mode === 50 ? setAnswers({...answers, [curr]: i}) : null} 
+                                            onClick={() => {
+                                                if (!answered || mode === 50) {
+                                                    setAnswers({...answers, [curr]: i});
+                                                    saveSeenQuestion(q.id); // <-- Track question seen
+                                                }
+                                            }} 
                                             className={`w-full text-left p-5 rounded-2xl border-2 transition-all font-medium ${style}`}
                                         >
                                             {opt}
@@ -267,7 +288,6 @@
             }
         }
 
-        // Initialize React app correctly
         const container = document.getElementById('app');
         const root = ReactDOM.createRoot(container);
         root.render(<App />);
