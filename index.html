@@ -97,8 +97,8 @@
                         mode: 'cors',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ 
-                            count,
-                            exclude: seenIds  // Pass seen IDs to Worker to avoid repeats
+                            count
+                            //exclude: seenIds  // Pass seen IDs to Worker to avoid repeats
                         })
                     });
 
